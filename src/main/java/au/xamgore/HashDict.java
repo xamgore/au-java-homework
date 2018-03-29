@@ -10,8 +10,10 @@ import java.util.Optional;
 
 
 public final class HashDict<K, V> implements Dictionary<K, V> {
+  public static final double DEFAULT_LOAD_FACTOR = 0.75d;
   private static final int INITIAL_BUCKETS_COUNT = 10;
   private static final int AVERAGE_BUCKET_SIZE = 8;
+  public static final int RESIZE_FACTOR = 2;
 
   private ArrayList<LinkedList<Pair<K, V>>> buckets;
   private final double loadFactor;
@@ -23,7 +25,7 @@ public final class HashDict<K, V> implements Dictionary<K, V> {
   }
 
   public HashDict() {
-    this(0.75d);
+    this(DEFAULT_LOAD_FACTOR);
   }
 
   {
@@ -170,12 +172,12 @@ public final class HashDict<K, V> implements Dictionary<K, V> {
 
   private void expand() {
     if (getLoadFactor() > loadFactor)
-      changeBucketsCount(buckets.size() * 2, true);
+      changeBucketsCount(buckets.size() * RESIZE_FACTOR, true);
   }
 
   private void shrink() {
     int count = Math.max(INITIAL_BUCKETS_COUNT, size / AVERAGE_BUCKET_SIZE);
-    if (getLoadFactor() < loadFactor / 2)
+    if (getLoadFactor() < loadFactor / RESIZE_FACTOR)
       changeBucketsCount(count, true);
   }
 }
