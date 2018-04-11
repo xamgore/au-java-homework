@@ -3,11 +3,14 @@ package au.xamgore;
 import com.sun.istack.internal.NotNull;
 import com.sun.istack.internal.Nullable;
 
-import java.util.HashMap;
-import java.util.Map;
+import java.io.*;
+import java.util.*;
+import java.util.Map.Entry;
 import java.util.function.Supplier;
 
-public final class TrieImpl implements Trie {
+import static java.util.Collections.*;
+
+public final class TrieImpl implements Trie, StreamSerializable {
 
   class Vertex {
     boolean isTerminal = false;
@@ -34,6 +37,7 @@ public final class TrieImpl implements Trie {
     }
   }
 
+  @NotNull
   private final Vertex root;
 
   private final Supplier<HashMap<Character, Vertex>> mapSupplier;
@@ -130,6 +134,60 @@ public final class TrieImpl implements Trie {
     if (isNotValid(prefix)) return 0;
     Vertex last = goThrough(prefix);
     return last == null ? 0 : last.storedWordsCounter;
+  }
+
+
+  @Override
+  public void serialize(OutputStream out) throws IOException {
+    DataOutputStream stream = new DataOutputStream(out);
+    Deque<Vertex> stack = new LinkedList<>();
+    Vertex v = root;
+
+    while (v != null) {
+      stream.writeInt(v.dict.size());
+      stream.writeInt(v.storedWordsCounter);
+      stream.writeBoolean(v.isTerminal);
+
+      for (Entry<Character, Vertex> entry : v.dict.entrySet()) {
+        stream.writeChar(entry.getKey());
+        stack.push(entry.getValue());
+      }
+
+      v = stack.poll();
+    }
+  }
+
+  /**
+   * Replace current state with data from input stream
+   *
+   * "Garbage in -> garbage out" policy
+   *
+   * @param in an input stream to read from
+   */
+  @Override
+  public void deserialize(InputStream in) throws IOException {
+    if (in == null) {
+      throw new NullPointerException();
+    }
+
+    DataInputStream stream = new DataInputStream(in);
+    Deque<Vertex> stack = new LinkedList<>();
+    Vertex cur = root;
+
+    while (cur != null) {
+      int numberOfCharsInCurrentVertex = stream.readInt();
+      cur.storedWordsCounter = stream.readInt();
+      cur.isTerminal = stream.readBoolean();
+
+      for (int i = 0; i < numberOfCharsInCurrentVertex; i++) {
+        char ch = stream.readChar();
+        Vertex next = new Vertex();
+        cur.dict.put(ch, next);
+        stack.push(next);
+      }
+
+      cur = stack.poll();
+    }
   }
 
 
