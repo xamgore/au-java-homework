@@ -6,21 +6,26 @@ import org.jetbrains.annotations.Nullable;
 import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Optional;
+import java.util.stream.Stream;
+
+import static java.lang.Math.floorMod;
 
 
 public final class HashDict<K, V> implements Dictionary<K, V> {
-  public static final double DEFAULT_LOAD_FACTOR = 0.75d;
-  private static final int INITIAL_BUCKETS_COUNT = 10;
-  private static final int AVERAGE_BUCKET_SIZE = 8;
-  public static final int RESIZE_FACTOR = 2;
+
+  private static final double DEFAULT_LOAD_FACTOR = 0.75d;
+  private static final int INITIAL_BUCKETS_COUNT = 8;
+  private static final int RESIZE_FACTOR = 2;
 
   private ArrayList<LinkedList<Pair<K, V>>> buckets;
   private final double loadFactor;
   private int size;
 
+  private Box<V> nullKeyInstance = Box.empty();
+
 
   public HashDict(double loadFactor) {
+    assert loadFactor > 0 && loadFactor <= 1;
     this.loadFactor = loadFactor;
   }
 
@@ -29,7 +34,7 @@ public final class HashDict<K, V> implements Dictionary<K, V> {
   }
 
   {
-    clear();
+    allocateBuckets(INITIAL_BUCKETS_COUNT);
   }
 
   /**
@@ -37,7 +42,8 @@ public final class HashDict<K, V> implements Dictionary<K, V> {
    */
   @Override
   public int size() {
-    return size;
+    int numberOfKeysEqualToNull = nullKeyInstance.isPresent() ? 1 : 0;
+    return size + numberOfKeysEqualToNull;
   }
 
   /**
@@ -45,7 +51,9 @@ public final class HashDict<K, V> implements Dictionary<K, V> {
    */
   @Override
   public boolean contains(@Nullable K key) {
-    return get(key) != null;
+    return key == null
+      ? nullKeyInstance.isPresent()
+      : getPairBy(key, chooseBucket(key)) != null;
   }
 
   /**
@@ -55,8 +63,12 @@ public final class HashDict<K, V> implements Dictionary<K, V> {
   @Nullable
   @Override
   public V get(@Nullable K key) {
-    return key == null ? null
-      : getPair(key).map(Pair::getValue).orElse(null);
+    if (key == null) {
+      return nullKeyInstance.unbox();
+    }
+
+    Pair<K, V> pair = getPairBy(key, chooseBucket(key));
+    return pair == null ? null : pair.getValue();
   }
 
   /**
@@ -69,15 +81,21 @@ public final class HashDict<K, V> implements Dictionary<K, V> {
   @Nullable
   @Override
   public V put(@Nullable K key, @Nullable V value) {
-    if (key == null || value == null) {
-      throw new IllegalArgumentException();
+    if (key == null) {
+      return nullKeyInstance.set(value);
     }
 
-    List<Pair<K, V>> bucket = getBucket(key);
+    List<Pair<K, V>> bucket = chooseBucket(key);
+    Pair<K, V> pair = getPairBy(key, bucket);
 
-    return getPair(key, bucket)
-      .orElseGet(() -> createNewPair(key, bucket))
-      .setVal(value);
+    if (pair == null) {
+      size += 1;
+      bucket.add(new Pair<>(key, value));
+      expandIfNeeded();
+      return null;
+    } else {
+      return pair.setVal(value);
+    }
   }
 
   /**
@@ -91,21 +109,20 @@ public final class HashDict<K, V> implements Dictionary<K, V> {
   @Override
   public V remove(@Nullable K key) {
     if (key == null) {
-      return null;
+      return nullKeyInstance.remove();
     }
 
-    List<Pair<K, V>> bucket = getBucket(key);
-    Pair<K, V> dead = getPair(key, bucket).orElse(null);
+    List<Pair<K, V>> bucket = chooseBucket(key);
+    Pair<K, V> pair = getPairBy(key, bucket);
 
-    if (dead == null) {
+    if (pair == null) {
       return null;
+    } else {
+      size -= 1;
+      bucket.removeIf(p -> p.getKey().equals(key));
+      shrinkIfNeeded();
+      return pair.getValue();
     }
-
-    bucket.removeIf(p -> p.getKey() == dead.getKey());
-    size--;
-    shrink();
-
-    return dead.getValue();
   }
 
   /**
@@ -113,71 +130,71 @@ public final class HashDict<K, V> implements Dictionary<K, V> {
    */
   @Override
   public void clear() {
-    changeBucketsCount(INITIAL_BUCKETS_COUNT, false);
+    nullKeyInstance.remove();
+    buckets.forEach(List::clear);
+    size = 0;
+  }
+
+  private void allocateBuckets(int count) {
+    buckets = new ArrayList<>(count);
+
+    Stream.generate(LinkedList<Pair<K, V>>::new)
+      .limit(count).forEach(buckets::add);
+  }
+
+  private void reallocateBuckets(int count) {
+    List<LinkedList<Pair<K, V>>> outdated = buckets;
+    allocateBuckets(count);
+
+    // put() increases the size counter
+    size = 0;
+
+    outdated.forEach(list -> list.forEach(pair -> {
+      put(pair.getKey(), pair.getValue());
+    }));
   }
 
 
-  private void changeBucketsCount(int count, boolean moveOld) {
-    ArrayList<LinkedList<Pair<K, V>>> oldBuckets = buckets;
+  /**
+   * @param key
+   * @return return the bucket where the element with <tt>key</tt>
+   * may be stored
+   */
+  @NotNull
+  private List<Pair<K, V>> chooseBucket(@NotNull K key) {
+    return buckets.get(floorMod(key.hashCode(), buckets.size()));
+  }
 
-    // add more buckets
-    buckets = new ArrayList<>(count);
-    for (int i = 0; i < count; i++) {
-      buckets.add(new LinkedList<>());
-    }
 
-    if (oldBuckets == null || !moveOld) {
-      size = 0;
-      return;
-    }
-
-    // move pairs from old list to new one
-    for (List<Pair<K, V>> b : oldBuckets) {
-      for (Pair<K, V> pair : b) {
-        getBucket(pair.getKey()).add(pair);
+  /**
+   * @param key
+   * @param bucket is place to search
+   * @return return the pair, that stores the value associated with key.
+   * Or null if it was not found.
+   */
+  @Nullable
+  private Pair<K, V> getPairBy(@NotNull K key, List<Pair<K, V>> bucket) {
+    for (Pair<K, V> pair : bucket) {
+      if (pair.getKey().equals(key)) {
+        return pair;
       }
     }
+
+    return null;
   }
 
-  @NotNull
-  private List<Pair<K, V>> getBucket(@NotNull K key) {
-    return buckets.get(Math.abs(key.hashCode() % buckets.size()));
+
+  private void expandIfNeeded() {
+    // the fullness is too big for the dict
+    if (buckets.size() * loadFactor < size)
+      reallocateBuckets(buckets.size() * RESIZE_FACTOR);
   }
 
-  @NotNull
-  private Optional<Pair<K, V>> getPair(@NotNull K key) {
-    return getPair(key, getBucket(key));
-  }
+  private void shrinkIfNeeded() {
+    int newBucketsSize = buckets.size() / RESIZE_FACTOR;
 
-  @NotNull
-  private Optional<Pair<K, V>> getPair(@NotNull K key, List<Pair<K, V>> bucket) {
-    return bucket.stream()
-      .filter(pair -> pair.getKey().equals(key))
-      .findFirst();
-  }
-
-  @NotNull
-  private Pair<K, V> createNewPair(@NotNull K key, List<Pair<K, V>> bucket) {
-    Pair<K, V> instance = new Pair<>(key, null);
-    bucket.add(instance);
-
-    size++;
-    expand();
-    return instance;
-  }
-
-  private double getLoadFactor() {
-    return (double) size / (buckets.size() * AVERAGE_BUCKET_SIZE);
-  }
-
-  private void expand() {
-    if (getLoadFactor() > loadFactor)
-      changeBucketsCount(buckets.size() * RESIZE_FACTOR, true);
-  }
-
-  private void shrink() {
-    int count = Math.max(INITIAL_BUCKETS_COUNT, size / AVERAGE_BUCKET_SIZE);
-    if (getLoadFactor() < loadFactor / RESIZE_FACTOR)
-      changeBucketsCount(count, true);
+    // the fullness must be ok after shrinking
+    if (newBucketsSize * loadFactor > size && buckets.size() > 1)
+      reallocateBuckets(newBucketsSize);
   }
 }

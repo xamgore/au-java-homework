@@ -31,7 +31,7 @@ public class TestHashDict {
 
   @Test
   void dictContainsAddedElements() {
-    assertEquals(null, d.put(0, "kek"));
+    assertNull(d.put(0, "kek"));
     assertTrue(d.contains(0));
 
     assertEquals("kek", d.put(0, "new"));
@@ -40,7 +40,7 @@ public class TestHashDict {
 
   @Test
   void dictDoesNotContainsElementsAfterRemoval() {
-    assertEquals(null, d.put(0, "kek"));
+    assertNull(d.put(0, "kek"));
     assertTrue(d.contains(0));
 
     assertEquals("kek", d.remove(0));
@@ -49,12 +49,12 @@ public class TestHashDict {
 
   @Test
   void dictReturnsNullIfNullIsPassedToGet() {
-    assertEquals(null, d.get(null));
+    assertNull(d.get(null));
   }
 
   @Test
   void dictReturnsNullIfNullIsPassedToRemove() {
-    assertEquals(null, d.remove(null));
+    assertNull(d.remove(null));
   }
 
   @Test
@@ -63,10 +63,23 @@ public class TestHashDict {
   }
 
   @Test
-  void dictDoesNotAllowToPutInvalidValues() {
-    assertThrows(IllegalArgumentException.class, () -> d.put(null, "val"));
-    assertThrows(IllegalArgumentException.class, () -> d.put(0, null));
-    assertThrows(IllegalArgumentException.class, () -> d.put(null, null));
+  void dictAllowsToPutInvalidValues() {
+    assertEquals(0, d.size());
+
+    assertNull(d.put(null, "val"));
+    assertEquals(1, d.size());
+
+    assertEquals("val", d.put(null, null));
+    assertEquals(1, d.size());
+
+    assertNull(d.put(0, null));
+    assertEquals(2, d.size());
+
+    assertNull(d.put(0, "kek"));
+    assertEquals(2, d.size());
+
+    assertEquals("kek", d.put(0, null));
+    assertEquals(2, d.size());
   }
 
   @Test
@@ -80,8 +93,14 @@ public class TestHashDict {
     d.put(1, "val");
     assertEquals(2, d.size());
 
+    d.put(null, "kek");
+    assertEquals(3, d.size());
+
     // reaction on delete
     d.remove(0);
+    assertEquals(2, d.size());
+
+    d.remove(null);
     assertEquals(1, d.size());
 
     d.remove(1);
@@ -127,7 +146,7 @@ public class TestHashDict {
     d.clear();
 
     assertEquals(0, d.size());
-    assertEquals(null, d.put(0, "val"));
+    assertNull(d.put(0, "val"));
     assertEquals(1, d.size());
     assertTrue(d.contains(0));
     assertEquals("val", d.get(0));
@@ -135,15 +154,15 @@ public class TestHashDict {
 
   @Test
   void removeInexistingElementReturnsNull() {
-    assertEquals(null, d.remove(2));
+    assertNull(d.remove(2));
     assertEquals(0, d.size());
 
     d.put(0, "kek");
     d.put(1, "val");
-    assertEquals(null, d.remove(2));
+    assertNull(d.remove(2));
     assertEquals(2, d.size());
 
-    assertEquals(null, d.remove(2));
+    assertNull(d.remove(2));
     assertEquals(2, d.size());
     assertEquals("kek", d.get(0));
     assertEquals("val", d.get(1));
@@ -153,15 +172,30 @@ public class TestHashDict {
   void removeDoesNotBreakTheOtherKeys() {
     d.put(0, "kek");
     d.put(1, "val");
-    assertEquals(null, d.remove(2));
+
+    assertNull(d.remove(2));
     assertEquals(2, d.size());
 
     assertEquals("kek", d.get(0));
     assertEquals("val", d.get(1));
 
     assertEquals("kek", d.remove(0));
-    assertEquals(null, d.remove(2));
+    assertNull(d.remove(2));
     assertEquals(1, d.size());
+  }
+
+  @Test
+  void testOnObjectWithHashEqualToMinValue() {
+    HashDict<Object, Integer> map = new HashDict<>();
+
+    Object problem = new Object() {
+      public int hashCode() {
+        return Integer.MIN_VALUE;
+      }
+    };
+
+    map.put(problem, 42);
+    assertTrue(map.contains(problem));
   }
 
   private void smokeTest(int threshold) {

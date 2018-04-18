@@ -4,6 +4,8 @@
     <bytecodeTargetLevel>
       <module name="dict_main" target="1.8" />
       <module name="dict_test" target="1.8" />
+      <module name="java-dict_main" target="1.8" />
+      <module name="java-dict_test" target="1.8" />
     </bytecodeTargetLevel>
   </component>
 </project>
