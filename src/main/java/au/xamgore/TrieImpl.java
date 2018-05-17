@@ -8,7 +8,7 @@ import java.util.*;
 import java.util.Map.Entry;
 import java.util.function.Supplier;
 
-import static java.util.Collections.*;
+import static java.util.Objects.requireNonNull;
 
 public final class TrieImpl implements Trie, StreamSerializable {
 
@@ -35,10 +35,23 @@ public final class TrieImpl implements Trie, StreamSerializable {
     void cut(Character ch) {
       dict.remove(ch);
     }
+
+    private boolean isValidStoredWordsCounter() {
+      int counter = isTerminal ? 1 : 0;
+
+      for (Vertex child : dict.values()) {
+        counter += child.storedWordsCounter;
+        if (!child.isValidStoredWordsCounter()) {
+          return false;
+        }
+      }
+
+      return counter == storedWordsCounter;
+    }
   }
 
   @NotNull
-  private final Vertex root;
+  private Vertex root;
 
   private final Supplier<HashMap<Character, Vertex>> mapSupplier;
 
@@ -160,23 +173,20 @@ public final class TrieImpl implements Trie, StreamSerializable {
   /**
    * Replace current state with data from input stream
    *
-   * "Garbage in -> garbage out" policy
-   *
    * @param in an input stream to read from
+   * @throws IllegalArgumentException if stream is malformed
+   * @throws IOException on io problems
    */
   @Override
   public void deserialize(InputStream in) throws IOException {
-    if (in == null) {
-      throw new NullPointerException();
-    }
-
-    DataInputStream stream = new DataInputStream(in);
+    DataInputStream stream = new DataInputStream(requireNonNull(in));
     Deque<Vertex> stack = new LinkedList<>();
-    Vertex cur = root;
+    Vertex newRoot = new Vertex();
+    Vertex cur = newRoot;
 
     while (cur != null) {
-      int numberOfCharsInCurrentVertex = stream.readInt();
-      cur.storedWordsCounter = stream.readInt();
+      int numberOfCharsInCurrentVertex = assureIsPositive(stream.readInt());
+      cur.storedWordsCounter = assureIsPositive(stream.readInt());
       cur.isTerminal = stream.readBoolean();
 
       for (int i = 0; i < numberOfCharsInCurrentVertex; i++) {
@@ -188,6 +198,17 @@ public final class TrieImpl implements Trie, StreamSerializable {
 
       cur = stack.poll();
     }
+
+    if (newRoot.isValidStoredWordsCounter()) {
+      root = newRoot;
+    }
+  }
+
+  private int assureIsPositive(int x) {
+    if (x < 0) {
+      throw new IllegalArgumentException();
+    }
+    return x;
   }
 
 

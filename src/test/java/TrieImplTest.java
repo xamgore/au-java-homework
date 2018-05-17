@@ -192,7 +192,7 @@ class TrieImplTest {
     assertEquals(1, t.howManyStartsWithPrefix("kek"));
     assertEquals(1, t.howManyStartsWithPrefix("k"));
 
-    assertTrue(t.add("kek"));
+    assertFalse(t.add("kek"));
     assertEquals(1, t.size());
     assertEquals(1, t.howManyStartsWithPrefix("kek"));
     assertEquals(1, t.howManyStartsWithPrefix("k"));

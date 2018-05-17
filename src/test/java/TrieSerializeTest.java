@@ -1,4 +1,5 @@
 import au.xamgore.TrieImpl;
+import com.sun.media.sound.InvalidFormatException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -24,6 +25,31 @@ class TrieSerializeTest {
     t = get();
     t.deserialize(new ByteArrayInputStream(out.toByteArray()));
     return t;
+  }
+
+  @Test
+  void testWithInvalidCountOfNodes() throws IOException {
+    t.add("k");
+    t.add("o");
+    t.add("p");
+
+    assertEquals(3, t.size());
+    assertTrue(t.contains("k"));
+    assertTrue(t.contains("o"));
+    assertTrue(t.contains("p"));
+
+    // spoil bytes
+    ByteArrayOutputStream out = new ByteArrayOutputStream();
+    DataOutputStream dout = new DataOutputStream(out);
+    dout.writeInt(-5); // some negative count
+    assertThrows(IllegalArgumentException.class,
+      () -> t.deserialize(new ByteArrayInputStream(out.toByteArray())));
+
+    // the old trie was not changed
+    assertEquals(t.size(), t.size(), "Size of deserialized doesn't equal to original");
+    assertTrue(t.contains("k"));
+    assertTrue(t.contains("o"));
+    assertTrue(t.contains("p"));
   }
 
   @Test
