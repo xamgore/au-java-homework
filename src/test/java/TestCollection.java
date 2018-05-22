@@ -144,4 +144,11 @@ class TestCollection {
     assertEquals(2, (int) foldr(diff, 0, ones));
   }
 
+  @Test
+  void testFoldr2() {
+    List<Integer> nums = asList(1, 2, 3);
+    List<Integer> history = foldr((x, y) -> { y.add(x); return y; }, new ArrayList(), nums);
+    assertEquals(asList(3, 2, 1), history);
+  }
+
 }

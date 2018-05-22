@@ -14,7 +14,7 @@ public class Collections {
     Deque<A> storage = new LinkedList<>();
 
     for (A elem : coll) {
-      storage.addLast(elem);
+      storage.addFirst(elem);
     }
 
     // send from call to storage in reversed order
